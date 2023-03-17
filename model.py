@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class Expert(nn.Module):
 
-    def __init__(self, dataset: str, input_size: int) -> None:
+    def __init__(self, dataset: str, input_size: int, optim: str, lr: float, weight_decay: float) -> None:
         super(Expert, self).__init__()
 
         # Architecture
@@ -27,6 +27,17 @@ class Expert(nn.Module):
         else:
             raise NotImplementedError
 
+        self.optimizer = None
+        self.set_optimizer(optim, lr, weight_decay)
+
+    def set_optimizer(self, optim: str, lr: float, weight_decay: float):
+        if optim == 'adam':
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
+        elif optim == 'sgd':
+            self.optimizer = torch.optim.SGD(self.parameters(), lr=lr, weight_decay=weight_decay)
+        else:
+            raise NotImplementedError
+
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         out =  self.model(input.reshape(input.shape[0], -1))
         return out
@@ -34,7 +45,7 @@ class Expert(nn.Module):
 
 class Discriminator(nn.Module):
 
-    def __init__(self, input_size: int, dataset: str) -> None:
+    def __init__(self, input_size: int, dataset: str, optim: str, lr: float, weight_decay: float) -> None:
         super(Discriminator, self).__init__()
 
         # Architecture
@@ -47,6 +58,13 @@ class Discriminator(nn.Module):
                 nn.Linear(256, 1),
                 nn.Sigmoid()
             )
+        else:
+            raise NotImplementedError
+
+        if optim == 'adam':
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=weight_decay)
+        elif optim == 'sgd':
+            self.optimizer = torch.optim.SGD(self.parameters(), lr=lr, weight_decay=weight_decay)
         else:
             raise NotImplementedError
 

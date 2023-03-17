@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from model import Expert, Discriminator
 
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 
 
 def initialize_expert(
@@ -12,7 +12,6 @@ def initialize_expert(
     architecture_name: str,
     expert: Expert,
     i: int,
-    optimizer,
     loss,
     data_train: DataLoader,
     device: str,
@@ -34,13 +33,14 @@ def initialize_expert(
             x_hat = expert(x_transf)
             loss_rec = loss(x_hat, x_transf)
             total_loss += loss_rec.item()*batch_size
-            optimizer.zero_grad()
+            expert.optimizer.zero_grad()
             loss_rec.backward()
-            optimizer.step()
+            expert.optimizer.step()
 
-        # Loss
-        mean_loss = total_loss/n_samples
-        print("initialization epoch [{}] expert [{}] loss {:.4f}".format(epoch+1, i+1, mean_loss))
+            # Loss
+            mean_loss = total_loss/n_samples
+            data_tqdm.set_description(f"initialization epoch [{epoch+1}] expert [{i+1}] loss {mean_loss:.4f}")
+
         if mean_loss < 0.002:
             break
 
@@ -83,22 +83,23 @@ def train_system(epoch, experts, discriminator, optimizers_E, optimizer_D, crite
         loss_D_canon.backward()
 
         # # Train Discriminator on experts output
-        # labels.fill_(transformed_label)
-        # loss_D_transformed = 0
-        # exp_outputs = []
-        # expert_scores = []
-        # for i, expert in enumerate(experts):
-        #     exp_output = expert(x_transf)
-        #     exp_outputs.append(exp_output.view(batch_size, 1, args.input_size))
-        #     exp_scores = discriminator(exp_output.detach())
-        #     expert_scores.append(exp_scores)
-        #     loss_D_transformed += criterion(exp_scores, labels)
-        # loss_D_transformed = loss_D_transformed / args.num_experts
-        # total_loss_D_transformed += loss_D_transformed.item() * batch_size
-        # loss_D_transformed.backward()
-        # optimizer_D.step()
+        labels.fill_(transformed_label)
+        loss_D_transformed = 0
+        exp_outputs = []
+        expert_scores = []
+        for i, expert in enumerate(experts):
+            exp_output = expert(x_transf)
+            exp_outputs.append(exp_output.view(batch_size, 1, args.input_size))
+            exp_scores = discriminator(exp_output.detach())
+            expert_scores.append(exp_scores)
+            loss_D_transformed += criterion(exp_scores, labels)
+        loss_D_transformed = loss_D_transformed / args.num_experts
+        total_loss_D_transformed += loss_D_transformed.item() * batch_size
+        loss_D_transformed.backward()
+        optimizer_D.step()
 
         # # Train experts
+        # 
         # exp_outputs = torch.cat(exp_outputs, dim=1)
         # expert_scores = torch.cat(expert_scores, dim=1)
         # mask_winners = expert_scores.argmax(dim=1)
