@@ -44,7 +44,7 @@ def initialize_expert(
         if mean_loss < 0.002:
             break
 
-    # torch.save(expert.state_dict(), checkpt_dir + f'/{name}_E_{i + 1}_init.pth')
+    torch.save(expert.state_dict(), checkpt_dir + f'/expert_{i + 1}_init.pth')
 
 
 def train_system(epoch, experts, discriminator, criterion, data_train, input_size, device, writer: SummaryWriter):
@@ -126,7 +126,7 @@ def train_system(epoch, experts, discriminator, criterion, data_train, input_siz
                                         device=device).unsqueeze(dim=1)
                     loss_E = criterion(D_E_x_transf, labels)
                     total_loss_expert[i][j] += loss_E.item() * won_samples_count
-                    loss_E.backward(retain_graph=True)
+                    loss_E.backward(retain_graph=True)  # TODO figure out why retain graph is necessary
                     total_expert_scores_D[i][j] += D_E_x_transf.squeeze().sum().item()
         for expert in experts:
             expert.optimizer.step()
@@ -143,5 +143,7 @@ def train_system(epoch, experts, discriminator, criterion, data_train, input_siz
                 if total_samples_expert[i][j] > 0:
                     mean_loss_expert = total_loss_expert[i][j] / total_samples_expert[i][j]
                     mean_expert_scores = total_expert_scores_D[i][j] / total_samples_expert[i][j]
-                    writer.scalar(f"Expert/{i + 1}-{j + 1}/Loss", mean_loss_expert, epoch + 1)
-                    writer.scalar(f"Expert/{i + 1}-{j + 1}/Score", mean_expert_scores, epoch + 1)
+                    writer.add_scalar(f"Expert/{i + 1}-{j + 1}/Loss", mean_loss_expert, epoch + 1)
+                    writer.add_scalar(f"Expert/{i + 1}-{j + 1}/Score", mean_expert_scores, epoch + 1)
+
+        writer.flush()
