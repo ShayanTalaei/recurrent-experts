@@ -1,23 +1,23 @@
-
 import torch
 from torch.utils.data import DataLoader, Dataset
 
 from model import Expert, Discriminator
+from torch.utils.tensorboard import SummaryWriter
 
 from tqdm.notebook import tqdm
 
 
 def initialize_expert(
-    epochs: int,
-    architecture_name: str,
-    expert: Expert,
-    i: int,
-    loss,
-    data_train: DataLoader,
-    device: str,
-    checkpt_dir: str
+        epochs: int,
+        architecture_name: str,
+        expert: Expert,
+        i: int,
+        loss,
+        data_train: DataLoader,
+        device: str,
+        checkpt_dir: str
 ) -> None:
-    print("Initializing expert [{}] as identity on preturbed data".format(i+1))
+    print("Initializing expert [{}] as identity on preturbed data".format(i + 1))
     expert.train()
 
     epoch_tqdm = tqdm(range(epochs), desc="Epoch")
@@ -32,14 +32,14 @@ def initialize_expert(
             x_transf = x_transf.view(x_transf.size(0), -1).to(device)
             x_hat = expert(x_transf)
             loss_rec = loss(x_hat, x_transf)
-            total_loss += loss_rec.item()*batch_size
+            total_loss += loss_rec.item() * batch_size
             expert.optimizer.zero_grad()
             loss_rec.backward()
             expert.optimizer.step()
 
             # Loss
-            mean_loss = total_loss/n_samples
-            data_tqdm.set_description(f"initialization epoch [{epoch+1}] expert [{i+1}] loss {mean_loss:.4f}")
+            mean_loss = total_loss / n_samples
+            data_tqdm.set_description(f"initialization epoch [{epoch + 1}] expert [{i + 1}] loss {mean_loss:.4f}")
 
         if mean_loss < 0.002:
             break
@@ -47,7 +47,7 @@ def initialize_expert(
     # torch.save(expert.state_dict(), checkpt_dir + f'/{name}_E_{i + 1}_init.pth')
 
 
-def train_system(epoch, experts, discriminator, criterion, data_train, input_size, device):
+def train_system(epoch, experts, discriminator, criterion, data_train, input_size, device, writer: SummaryWriter):
     discriminator.train()
     for i, expert in enumerate(experts):
         expert.train()
@@ -99,7 +99,7 @@ def train_system(epoch, experts, discriminator, criterion, data_train, input_siz
                 loss_D_transformed += criterion(score, labels)
             exp_outputs[i] = torch.stack(exp_outputs[i], dim=0)
         exp_outputs = torch.stack(exp_outputs, dim=0)
-        loss_D_transformed = loss_D_transformed / (num_experts*num_experts)
+        loss_D_transformed = loss_D_transformed / (num_experts * num_experts)
         total_loss_D_transformed += loss_D_transformed.item() * batch_size
         loss_D_transformed.backward()
         discriminator.optimizer.step()
@@ -126,27 +126,22 @@ def train_system(epoch, experts, discriminator, criterion, data_train, input_siz
                                         device=device).unsqueeze(dim=1)
                     loss_E = criterion(D_E_x_transf, labels)
                     total_loss_expert[i][j] += loss_E.item() * won_samples_count
-                    loss_E.backward(retain_graph=True) # TODO figure out why retain graph is necessary
+                    loss_E.backward(retain_graph=True)
                     total_expert_scores_D[i][j] += D_E_x_transf.squeeze().sum().item()
         for expert in experts:
             expert.optimizer.step()
         # Logging
         mean_loss_D_generated = total_loss_D_transformed / n_samples
         mean_loss_D_canon = total_loss_D_canon / n_samples
-        print("epoch [{}] loss_D_transformed {:.4f}".format(epoch + 1, mean_loss_D_generated))
-        print("epoch [{}] loss_D_canon {:.4f}".format(epoch + 1, mean_loss_D_canon))
-        # writer.add_scalar('loss_D_canonical', mean_loss_D_canon, epoch + 1)
-        # writer.add_scalar('loss_D_transformed', mean_loss_D_generated, epoch + 1)
+
+        writer.add_scalar('Discriminator/Loss/Canon', mean_loss_D_canon, epoch + 1)
+        writer.add_scalar('Discriminator/Loss/Generated', mean_loss_D_generated, epoch + 1)
+
         for i in range(num_experts):
             for j in range(num_experts):
-                # print("epoch [{}] expert [{}][{}] n_samples {}".format(epoch + 1, i + 1, j + 1, total_samples_expert[i][j]))
-                # writer.add_scalar('expert_{}_n_samples'.format(i + 1), total_samples_expert[i], epoch + 1)
-                # writer.add_text('expert_{}_winning_samples'.format(i + 1),
-                #                    ":".join([str(j) for j in expert_winning_samples_idx[i]]), epoch + 1)
+                writer.add_scalar(f"Expert/{i + 1}-{j + 1}/Wins", total_samples_expert[i][j], epoch + 1)
                 if total_samples_expert[i][j] > 0:
                     mean_loss_expert = total_loss_expert[i][j] / total_samples_expert[i][j]
                     mean_expert_scores = total_expert_scores_D[i][j] / total_samples_expert[i][j]
-                    # print("epoch [{}] expert [{}][{}] loss {:.4f}".format(epoch + 1, i + 1, j + 1, mean_loss_expert))
-                    # print("epoch [{}] expert [{}][{}] scores {:.4f}".format(epoch + 1, i + 1, j + 1, mean_expert_scores))
-                    # writer.add_scalar('expert_{}_loss'.format(i + 1), mean_loss_expert, epoch + 1)
-                    # writer.add_scalar('expert_{}_scores'.format(i + 1), mean_expert_scores, epoch + 1)
+                    writer.scalar(f"Expert/{i + 1}-{j + 1}/Loss", mean_loss_expert, epoch + 1)
+                    writer.scalar(f"Expert/{i + 1}-{j + 1}/Score", mean_expert_scores, epoch + 1)
