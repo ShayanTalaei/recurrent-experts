@@ -56,7 +56,8 @@ def train_system(
         input_size,
         device,
         writer: SummaryWriter,
-        confusion_matrix: torch.Tensor
+        confusion_matrix: torch.Tensor,
+        freeze_discriminator: bool
 ) -> None:
     discriminator.train()
     for i, expert in enumerate(experts):
@@ -111,7 +112,9 @@ def train_system(
         loss_D_transformed = loss_D_transformed / (num_experts * num_experts)
         total_loss_D_transformed += loss_D_transformed.item() * batch_size
         loss_D_transformed.backward()
-        discriminator.optimizer.step()
+
+        if not freeze_discriminator:
+          discriminator.optimizer.step()
 
         # Train experts
         exp_scores = exp_scores.reshape(-1, batch_size).detach()
@@ -119,9 +122,8 @@ def train_system(
 
         # batch x 2
         mask_winners = torch.tensor([divmod(idx.item(), num_experts) for idx in flat_indexes]).detach()
-        confusion_positions = torch.concat([mask_winners, x_chain], dim=1)
-        print(confusion_positions.shape)
-        return
+        confusion_positions = torch.concat([mask_winners, x_chain], dim=1).type(torch.int32)
+        confusion_matrix[confusion_positions[:, 0], confusion_positions[:, 1], confusion_positions[:, 2], confusion_positions[:, 3]] += 1
 
         # Update each expert on samples it won
         for expert in experts:
