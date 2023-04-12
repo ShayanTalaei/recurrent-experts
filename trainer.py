@@ -1,10 +1,9 @@
 import torch
-from torch.utils.data import DataLoader, Dataset
-
-from model import Expert, Discriminator
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
 from tqdm.notebook import tqdm
+
+from model import Expert
 
 
 def initialize_expert(
@@ -26,7 +25,8 @@ def initialize_expert(
         n_samples = 0
         data_tqdm = tqdm(data_train, desc="Batch")
         for batch in data_tqdm:
-            x_canonical, x_transf = batch
+            x_canonical, x_transf, _ = batch
+
             batch_size = x_canonical.size(0)
             n_samples += batch_size
             x_transf = x_transf.view(x_transf.size(0), -1).to(device)
@@ -47,7 +47,17 @@ def initialize_expert(
     torch.save(expert.state_dict(), checkpt_dir + f'/expert_{i + 1}_init.pth')
 
 
-def train_system(epoch, experts, discriminator, criterion, data_train, input_size, device, writer: SummaryWriter):
+def train_system(
+        epoch,
+        experts,
+        discriminator,
+        criterion,
+        data_train,
+        input_size,
+        device,
+        writer: SummaryWriter,
+        confusion_matrix: torch.Tensor
+) -> None:
     discriminator.train()
     for i, expert in enumerate(experts):
         expert.train()
@@ -64,11 +74,10 @@ def train_system(epoch, experts, discriminator, criterion, data_train, input_siz
     total_loss_expert = [[0 for i in range(num_experts)] for _ in range(num_experts)]
     total_samples_expert = [[0 for i in range(num_experts)] for _ in range(num_experts)]
     total_expert_scores_D = [[0 for _ in range(num_experts)] for _ in range(num_experts)]
-    # expert_winning_samples_idx = [[[] for i in range(num_experts)] for _ in range(num_experts)]
 
     # Iterate through data
     for idx, batch in enumerate(data_train):
-        x_canon, x_transf = batch
+        x_canon, x_transf, x_chain = batch
         # x_transf = torch.randn(x_canon.size()) # TODO temporary since do not have the preturbed data yet
         batch_size = x_canon.size(0)
         n_samples += batch_size
@@ -107,11 +116,17 @@ def train_system(epoch, experts, discriminator, criterion, data_train, input_siz
         # Train experts
         exp_scores = exp_scores.reshape(-1, batch_size).detach()
         flat_indexes = exp_scores.argmax(0)
+
+        # batch x 2
         mask_winners = torch.tensor([divmod(idx.item(), num_experts) for idx in flat_indexes]).detach()
+        confusion_positions = torch.concat([mask_winners, x_chain], dim=1)
+        print(confusion_positions.shape)
+        return
 
         # Update each expert on samples it won
         for expert in experts:
             expert.optimizer.zero_grad()
+
         for i, expert_1 in enumerate(experts):
             for j, expert_2 in enumerate(experts):
                 winning_indices = mask_winners.eq(torch.tensor([i, j])).all(dim=1)
