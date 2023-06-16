@@ -1,78 +1,47 @@
-from typing import Callable, List, Tuple
-from typing import Dict
+from typing import List, Tuple
 
-import numpy as np
 import torch
-import torchvision
+from torch import Tensor
 from torch.utils.data.dataset import Dataset
-from torchvision import transforms
+from torchvision.datasets import MNIST
 
-DATA_DIR = "./data"
-
-transformers: Dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
-    "horizontal_flip": lambda x: transforms.functional.hflip(x),
-    "rotate_left": lambda x: torch.rot90(x),
-    "horizontal_shift": lambda x: torch.roll(x, x.size(1) // 2, 1),
-    "vertical_shift": lambda x: torch.roll(x, x.size(0) // 2, 0),
-}
-
-t_name_to_index: Dict[str, int] = {
-    t: i for i, t in enumerate(transformers.keys())
-}
-
-t_index_to_name: Dict[int, str] = {
-    index: name for name, index in t_name_to_index.items()
-}
-
-abbreviations: Dict[str, str] = {
-    t: t.split('_')[0][0] + t.split('_')[1][0]
-    for t in transformers.keys()
-}
-
-np.random.seed(4363562)
+from transformer import Chain
 
 
-# create a class for MNIST dataset with different transformations
-# we need to combine pairs of transformations
-# list of initial transformations are: horizontal flip, left rotate, right rotate, right shift, upshift
-class MNISTDataset(Dataset):
-    def __init__(self, transformer_names: List[str], train: bool = True):
-        for transformer_name in transformer_names:
-            assert transformer_name in transformers.keys(), f"{transformer_name} is not a valid transformer"
+class ChainedMNIST(Dataset):
+    def __init__(
+        self,
+        seed: int,
+        data_dir: str,
+        chains: List[Chain],
+        train: bool = True,
+        max_samples: int = 50_000,
+    ) -> None:
+        self.chains = chains
+        self.train = train
 
-        self.transformer_names = transformer_names
-        data = torchvision.datasets.MNIST(root=DATA_DIR, train=True, download=True)
-        self.X = data.data[:50_000] if train else data.data[50_000:]
+        if train:
+            # generate random data
+            self.X = torch.randn(size=(max_samples, 28, 28), generator=torch.Generator().manual_seed(seed))
+        else:
+            mnist = MNIST(root=data_dir, train=train, download=True)
+            self.X = mnist.data[:max_samples]
 
-    def __len__(self):
+        self.chain_index = torch.randint(
+            low=0,
+            high=len(chains),
+            size=(max_samples,),
+            generator=torch.Generator().manual_seed(seed),
+        )
+
+    def __len__(self) -> int:
         return len(self.X)
 
-    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        x = self.X[index].reshape((28, 28)) / 256
-        x = (x - 0.1307) / 0.3081
-        t, chain = self.get_random_transformer()
-        return x.type(torch.FloatTensor), t(x).type(torch.FloatTensor), chain
-
-    def get_sample_with_trans(self, index: int, *transformations: str) -> tuple[torch.Tensor, torch.Tensor]:
-        x = self.X[index].reshape((28, 28)) / 256
-        x = (x - 0.1307) / 0.3081
-        transformer_list = [transformers[t] for t in transformations]
-        out = x
-        for transformer in transformer_list:
-            out = transformer(out)
-
-        return x, out
-
-    def get_random_transformer(self) -> Tuple[Callable[[torch.Tensor], torch.Tensor], torch.Tensor]:
-        # get two random unique transformer names
-        transformer_names = np.random.choice(self.transformer_names, 2, replace=False)
-
-        def transformer(t: torch.Tensor) -> torch.Tensor:
-            return transformers[transformer_names[1]](transformers[transformer_names[0]](t))
-
-        return transformer, torch.Tensor(
-            [
-                t_name_to_index[transformer_names[0]],
-                t_name_to_index[transformer_names[1]]
-            ]
-        )
+    def __getitem__(self, index: int) -> Tuple[Tensor, Tensor, int]:
+        if not self.train:
+            canonical: Tensor = ((self.X[index] / 255 - 0.1307) / 0.3081).type(torch.FloatTensor)
+        else:
+            canonical: Tensor = self.X[index].type(torch.FloatTensor)
+        chosen_chain_index = self.chain_index[index].item()
+        transformed: Tensor = self.chains[chosen_chain_index].forward(canonical).type(torch.FloatTensor)
+        return canonical, transformed, chosen_chain_index
