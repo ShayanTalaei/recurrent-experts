@@ -53,7 +53,7 @@ class GreedySelector(Selector):
         average_composition_losses = []
 
         for composition_index, composition in enumerate(compositions):
-            mask_winners = winner_indices == composition_index
+            mask_winners = winner_indices.eq(composition_index)
             won_losses = winner_losses[mask_winners]
             won_samples_count = torch.sum(mask_winners).item()
             avg_loss = torch.mean(won_losses)

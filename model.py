@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import List, Any, Optional, Set, Callable, Iterator
 
 from torch import Tensor
-from torch.nn import Module, Sequential, Linear, Tanh, BatchNorm1d, LeakyReLU, Parameter
+from torch.nn import Module, Sequential, Linear, Tanh, BatchNorm1d, LeakyReLU, Parameter, Sigmoid
 from torch.optim import Optimizer
 
 
@@ -29,6 +29,31 @@ def single_neuron_expert(input_size: int) -> Module:
     return Linear(input_size, input_size)
 
 
+def leaky_discriminator(input_size: int) -> Module:
+    return Sequential(
+        Linear(input_size, 512),
+        LeakyReLU(0.2, inplace=True),
+        Linear(512, 256),
+        LeakyReLU(0.2, inplace=True),
+        Linear(256, 1),
+        Sigmoid(),
+    )
+
+
+class Discriminator(Module):
+    def __init__(self, nn: Optional[Module], optim: Optional[Optimizer]) -> None:
+        super(Discriminator, self).__init__()
+        if nn is not None:
+            assert isinstance(nn, Module), "nn must be a torch.nn.Module"
+        if optim is not None:
+            assert isinstance(optim, Optimizer), "optim must be a torch.optim.Optimizer"
+        self.model = nn
+        self.optimizer = optim
+
+    def forward(self, inp: Tensor) -> Tensor:
+        return self.model(inp.reshape(inp.shape[0], -1))
+
+
 class Expert(Module):
     def __init__(self, nn: Optional[Module], optim: Optional[Optimizer]) -> None:
         super(Expert, self).__init__()
@@ -36,7 +61,6 @@ class Expert(Module):
             assert isinstance(nn, Module), "nn must be a torch.nn.Module"
         if optim is not None:
             assert isinstance(optim, Optimizer), "optim must be a torch.optim.Optimizer"
-
         self.model = nn
         self.optimizer = optim
 
