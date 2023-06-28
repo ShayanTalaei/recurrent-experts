@@ -100,7 +100,58 @@ vertical_shift = LambdaTransformer(
     reverse_func=lambda x: roll(x, (x.size(0) + 1) // 2, 0),
     name="vertical_shift",
 )
-all_transformers = [horizontal_flip, rotate_left, horizontal_shift, vertical_shift]
+# all_transformers = [horizontal_flip, rotate_left, horizontal_shift, vertical_shift]
+
+lambda_up    = lambda x: roll(x, -4, 1)
+lambda_left  = lambda x: roll(x, -4, 2)
+lambda_right = lambda x: roll(x, 4, 2)
+lambda_down  = lambda x: roll(x, 4, 1)
+
+
+shift_up = LambdaTransformer(
+  forward_func=lambda_up,
+  reverse_func= lambda_down,
+  name="shift_up"
+)
+shift_left = LambdaTransformer(
+  forward_func=lambda_left,
+  reverse_func= lambda_right,
+  name="shift_left"
+)
+shift_right = LambdaTransformer(
+  forward_func=lambda_right,
+  reverse_func= lambda_left,
+  name="shift_right"
+)
+shift_down = LambdaTransformer(
+  forward_func=lambda_down,
+  reverse_func= lambda_up,
+  name="shift_down"
+)
+shift_up_left = LambdaTransformer(
+  forward_func=lambda x:lambda_up(lambda_left(x)),
+  reverse_func= lambda x:lambda_down(lambda_right(x)),
+  name="shift_up_left"
+)
+shift_up_right = LambdaTransformer(
+  forward_func=lambda x:lambda_up(lambda_right(x)),
+  reverse_func= lambda x:lambda_down(lambda_left(x)),
+  name="shift_up_right"
+)
+shift_down_left = LambdaTransformer(
+  forward_func=lambda x:lambda_down(lambda_left(x)),
+  reverse_func= lambda x:lambda_up(lambda_right(x)),
+  name="shift_down_left"
+)
+shift_down_right = LambdaTransformer(
+  forward_func=lambda x:lambda_down(lambda_right(x)),
+  reverse_func= lambda x:lambda_up(lambda_left(x)),
+  name="shift_down_right"
+)
+
+all_transformers = [shift_up, shift_down, shift_right, shift_left,
+                    shift_up_left, shift_up_right, 
+                    shift_down_left, shift_down_right]
 
 
 class Chain(Transformer):

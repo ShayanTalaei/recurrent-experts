@@ -5,7 +5,7 @@ from typing import List, Any, Optional, Set, Callable, Iterator
 from torch import Tensor
 from torch.nn import Module, Sequential, Linear, Tanh, BatchNorm1d, LeakyReLU, Parameter, Sigmoid
 from torch.optim import Optimizer
-
+from torch import nn
 
 def block_expert(input_size: int) -> Module:
     def block(in_feat: int, out_feat: int, normalize=True) -> List[Module]:
@@ -23,6 +23,77 @@ def block_expert(input_size: int) -> Module:
         Linear(1024, int(input_size)),
         Tanh(),
     )
+
+class MnistDiscriminator(nn.Module):
+    def __init__(self):
+        super(MnistDiscriminator, self).__init__()
+        
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, padding=1),
+            nn.ELU(),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1),
+            nn.ELU(),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1),
+            nn.ELU(),
+            nn.AvgPool2d(kernel_size=2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.ELU(),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.ELU(),
+            nn.AvgPool2d(kernel_size=2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ELU(),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.ELU(),
+            nn.AvgPool2d(kernel_size=2)
+        )
+        
+        self.fc_layers = nn.Sequential(
+            nn.Linear(64 * 4 * 4, 1024),
+            nn.ELU(),
+            nn.Linear(1024, 1),
+            nn.Sigmoid()
+        )
+
+        self.optimizer = None
+        
+    def forward(self, x):
+        x = self.conv_layers(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc_layers(x)
+        return x
+
+
+class MnistExpert(nn.Module):
+    def __init__(self):
+        super(MnistExpert, self).__init__()
+        
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ELU(),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ELU(),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ELU(),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ELU()
+        )
+        
+        self.fc_layer = nn.Sequential(
+            nn.Conv2d(32, 1, kernel_size=3, padding=1),
+            nn.Sigmoid()
+        )
+
+        self.optimizer = None
+        
+    def forward(self, x):
+        x = self.conv_layers(x)
+        x = self.fc_layer(x)
+        return x
 
 
 def single_neuron_expert(input_size: int) -> Module:
