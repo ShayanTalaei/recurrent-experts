@@ -149,9 +149,10 @@ shift_down_right = LambdaTransformer(
   name="shift_down_right"
 )
 
-all_transformers = [shift_up, shift_down, shift_right, shift_left,
-                    shift_up_left, shift_up_right, 
-                    shift_down_left, shift_down_right]
+# all_transformers = [shift_up, shift_down, shift_right, shift_left,
+#                     shift_up_left, shift_up_right, 
+#                     shift_down_left, shift_down_right]
+all_transformers = [shift_up, shift_right, shift_up_right]
 
 
 class Chain(Transformer):

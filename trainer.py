@@ -85,6 +85,7 @@ def train_compositions_without_selector(
     device: str,
     discriminator: Discriminator,
     experts: List[Expert],
+    compositions: List[Composition],
     data_train: DataLoader,
     metrics: Metrics
 ) -> None:
@@ -100,11 +101,7 @@ def train_compositions_without_selector(
     total_loss_D_canon = 0
     total_loss_D_transformed = 0
     n_samples = 0
-    # total_loss_expert = [0 for i in range(len(experts))]
-    # total_samples_expert = [0 for i in range(len(experts))]
-    # expert_scores_D = [0 for i in range(len(experts))]
-    # expert_winning_samples_idx = [[] for i in range(len(experts))]
-    num_experts = len(experts)
+    num_compositions = len(compositions)
 
     # Iterate through data
     pbar = tqdm(data_train)
@@ -125,48 +122,51 @@ def train_compositions_without_selector(
         # Train Discriminator on experts output
         labels.fill_(transformed_label)
         loss_D_transformed = 0
-        exp_outputs = []
-        expert_scores = []
-        for i, expert in enumerate(experts):
-            exp_output = expert(x_transf)
-            exp_outputs.append(exp_output)
-            exp_scores = discriminator(exp_output.detach().to(device))
-            expert_scores.append(exp_scores)
-            loss_D_transformed += criterion(exp_scores, labels)
-        loss_D_transformed = loss_D_transformed / num_experts
+        comp_outputs = []
+        comp_scores = []
+        for i, composition in enumerate(compositions):
+            comp_output = composition(x_transf)
+            comp_outputs.append(comp_output)
+            comp_score = discriminator(comp_output.detach().to(device))
+            comp_scores.append(comp_score)
+            loss_D_transformed += criterion(comp_score, labels)
+        loss_D_transformed = loss_D_transformed / num_compositions
         total_loss_D_transformed += loss_D_transformed.item() * batch_size
         loss_D_transformed.backward()
         discriminator.optimizer.step()
 
-        # Train experts
-        exp_outputs = torch.cat(exp_outputs, dim=1)
-        expert_scores = torch.cat(expert_scores, dim=1)
-        mask_winners = expert_scores.argmax(dim=1)
+        # Train compositions
+        comp_outputs = torch.cat(comp_outputs, dim=1)
+        comp_scores = torch.cat(comp_scores, dim=1)
+        mask_winners = comp_scores.argmax(dim=1)
         winner_indices = mask_winners.tolist()
         metrics.winners[chosen_chain_index, winner_indices] += 1
-        # print(expert_scores.shape)
-        # current_scores = np.zeros((expert_scores.shape[0], metrics.num_chains, expert_scores.shape[1]), dtype=np.float32)
-        # current_scores[np.arange(expert_scores.shape[0]), np.array(chosen_chain_index), :] = expert_scores.detach().cpu().numpy()
-        # shape = current_scores.shape
-        # metrics.scores += current_scores.reshape(shape[1], shape[2], shape[0])
 
-        # Update each expert on samples it won
-        for i, expert in enumerate(experts):
+        # zero grad experts
+        for expert in experts:
+            expert.optimizer.zero_grad()
+
+        # Update each composition on samples it won
+        for i, comp in enumerate(compositions):
             winning_indexes = mask_winners.eq(i).nonzero().squeeze(dim=-1)
             # accrue = 0 if idx == 0 else 1
             # expert_winning_samples_idx[i] += (winning_indexes + accrue * n_samples).tolist()
-            n_expert_samples = winning_indexes.size(0)
-            if n_expert_samples > 0:
-                metrics.composition_total_samples[i] += n_expert_samples
-                exp_samples = exp_outputs[winning_indexes, i].unsqueeze(1)
-                D_E_x_transf = discriminator(exp_samples)
-                labels = torch.full((n_expert_samples,), canonical_label, device=device).unsqueeze(dim=1)
+            n_comp_samples = winning_indexes.size(0)
+            if n_comp_samples > 0:
+                metrics.composition_total_samples[i] += n_comp_samples
+                comp_samples = comp_outputs[winning_indexes, i].unsqueeze(1)
+                D_E_x_transf = discriminator(comp_samples)
+                labels = torch.full((n_comp_samples,), canonical_label, device=device).unsqueeze(dim=1)
                 loss_E = criterion(D_E_x_transf, labels)
-                metrics.composition_total_loss[i] += loss_E.item() * n_expert_samples
-                expert.optimizer.zero_grad()
+                metrics.composition_total_loss[i] += loss_E.item() * n_comp_samples
+                # comp.optimizer.zero_grad()
                 loss_E.backward(retain_graph=True)
-                expert.optimizer.step()
+                # expert.optimizer.step()
                 metrics.composition_scores_D[i] += D_E_x_transf.squeeze().sum().item()
+        # step experts
+        for expert in experts:
+            expert.optimizer.step()
+
         if idx % 10 == 0:
           pbar.set_description(metrics.get_loss_desc())
           # print(metrics.get_loss_desc())

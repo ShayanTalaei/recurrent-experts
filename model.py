@@ -2,6 +2,7 @@ import itertools
 from dataclasses import dataclass
 from typing import List, Any, Optional, Set, Callable, Iterator
 
+import torch
 from torch import Tensor
 from torch.nn import Module, Sequential, Linear, Tanh, BatchNorm1d, LeakyReLU, Parameter, Sigmoid
 from torch.optim import Optimizer
@@ -141,9 +142,15 @@ class Expert(Module):
 
 @dataclass
 class Composition:
-    name: str
-    experts: List[Expert]
-    indices: List[int]
+
+    def __init__(self, name, experts, indices):
+        self.name = name
+        self.experts = experts
+        self.indices = indices
+        self.father = None
+        self.last_X = None
+        self.last_eval = None
+
 
     def forward(self, x: Tensor) -> Tensor:
         for expert in self.experts:
@@ -165,6 +172,28 @@ class Composition:
 
     def __len__(self) -> int:
         return len(self.experts)
+
+    def __call__(self, x):
+        if (self.father != None) and (self.father.last_X != None) and (self.father.last_X.data_ptr() == x.data_ptr()):
+            res = self.experts[-1](self.father.last_eval)
+        else:
+            res = self.forward(x)
+        self.last_X = x
+        self.last_eval = res
+        return res
+
+    def set_father(self, compositions):
+        for comp in compositions:
+            if len(self.indices) == len(comp.indices) + 1:
+                father = True
+                for i, ind in enumerate(comp.indices):
+                    if ind != self.indices[i]:
+                      father = False
+                      break
+                if father:
+                    self.father = comp
+                    break
+    
 
 
 def create_composition_with_indices(all_experts: List[Expert], indices: List[int]) -> Composition:
@@ -191,8 +220,10 @@ def create_all_compositions(
         composition_indices = [
             list(product) for size in of_sizes for product in itertools.product(indices, repeat=size)
         ]
-
-    return [create_composition_with_indices(all_experts, indices) for indices in composition_indices]
+    compositions = [create_composition_with_indices(all_experts, indices) for indices in composition_indices]
+    for comp in compositions:
+        comp.set_father(compositions)
+    return compositions
 
 
 def create_expert(
