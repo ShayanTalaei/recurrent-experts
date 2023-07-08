@@ -1,8 +1,8 @@
 from typing import List, Tuple
 
 import torch
-from torch import nn
 from torch import Tensor
+from torch import nn
 from torch.utils.data.dataset import Dataset
 from torchvision.datasets import MNIST
 

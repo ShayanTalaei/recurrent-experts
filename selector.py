@@ -57,8 +57,8 @@ class GreedySelector(Selector):
             won_losses = winner_losses[mask_winners]
             won_samples_count = torch.sum(mask_winners).item()
             avg_loss = torch.mean(won_losses)
-            metrics.composition_total_samples[composition_index] += won_samples_count
-            metrics.composition_total_loss[composition_index] += avg_loss.item() * won_samples_count
+            metrics.composition_won_samples[composition_index] += won_samples_count
+            metrics.composition_loss[composition_index] += avg_loss.item() * won_samples_count
             average_composition_losses.append(avg_loss)
 
         return average_composition_losses
