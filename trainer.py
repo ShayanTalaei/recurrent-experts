@@ -18,6 +18,7 @@ def initialize_expert(
     loss: Callable[[Tensor, Tensor], Tensor],
     train_loader: DataLoader,
     device: torch.device,
+    model_name: str,
     checkpt_dir: str,
 ) -> None:
     print("Initializing expert [{}] as identity on preturbed data".format(expert_index + 1))
@@ -48,8 +49,8 @@ def initialize_expert(
 
         if last_loss < 0.002:
             break
-
-    torch.save(expert.state_dict(), checkpt_dir + f"/expert_{expert_index + 1}_init.pth")
+    path = checkpt_dir + f'/expert_{expert_index + 1}_{model_name}.pth'
+    torch.save(expert.state_dict(), path)
     return last_loss
 
 def train_compositions_with_selector(
@@ -141,6 +142,7 @@ def train_compositions_without_selector(
         mask_winners = comp_scores.argmax(dim=1)
         winner_indices = mask_winners.tolist()
         metrics.winners[chosen_chain_index, winner_indices] += 1
+        
 
         # zero grad experts
         for expert in experts:
@@ -159,15 +161,13 @@ def train_compositions_without_selector(
                 labels = torch.full((n_comp_samples,), canonical_label, device=device).unsqueeze(dim=1)
                 loss_E = criterion(D_E_x_transf, labels)
                 metrics.composition_total_loss[i] += loss_E.item() * n_comp_samples
-                # comp.optimizer.zero_grad()
                 loss_E.backward(retain_graph=True)
-                # expert.optimizer.step()
                 metrics.composition_scores_D[i] += D_E_x_transf.squeeze().sum().item()
         # step experts
         for expert in experts:
             expert.optimizer.step()
 
         if idx % 10 == 0:
-          pbar.set_description(metrics.get_loss_desc())
+          pbar.set_description(metrics.get_loss_desc() + metrics.get_score_desc())
           # print(metrics.get_loss_desc())
           pbar.refresh()

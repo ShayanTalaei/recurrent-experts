@@ -149,10 +149,22 @@ shift_down_right = LambdaTransformer(
   name="shift_down_right"
 )
 
+inverse_contrast = LambdaTransformer(
+    forward_func=lambda x: 1-x,
+    reverse_func= lambda x: 1-x,
+    name="inverse_contrast"
+    )
+
+guassian_blur = LambdaTransformer(
+    forward_func=lambda x: torch.clamp(x + torch.randn_like(x) * 0.25, 0, 1),
+    reverse_func= lambda x: torch.clamp(x + torch.randn_like(x) * 0.25, 0, 1),
+    name="guassian_blur"
+    )
+
 # all_transformers = [shift_up, shift_down, shift_right, shift_left,
 #                     shift_up_left, shift_up_right, 
 #                     shift_down_left, shift_down_right]
-all_transformers = [shift_up, shift_right, shift_up_right]
+all_transformers = [shift_up, shift_right]
 
 
 class Chain(Transformer):

@@ -139,6 +139,12 @@ class Expert(Module):
     def forward(self, inp: Tensor) -> Tensor:
         return self.model(inp.reshape(inp.shape[0], -1))
 
+def initialize_expert_model(model_name):
+  if model_name == "mnist_expert":
+    model = MnistExpert()
+  else:
+    print("Error: There is no model with this name.")
+  return model
 
 @dataclass
 class Composition:
