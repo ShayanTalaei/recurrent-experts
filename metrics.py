@@ -5,6 +5,8 @@ import torch
 import wandb
 from torch import Tensor
 
+from utils import *
+
 
 class Metrics:
     def __init__(
@@ -24,7 +26,7 @@ class Metrics:
             0 for i in range(self.num_compositions)
         ]
         self.scores: List[List[np.ndarray]] = [[] for _ in range(self.num_chains)]
-        self.winners: np.ndarray = np.zeros((self.num_chains, self.num_compositions))
+        self.winners: np.ndarray = np.zeros((self.num_chains, self.num_compositions), dtype=int)
 
     def reset(self) -> None:
         for i in range(self.num_compositions):
@@ -33,6 +35,19 @@ class Metrics:
 
     def flush(self, iteration: int, epoch: int) -> None:
         wandb.log(self._get_wandb_log(epoch, iteration))
+
+    def log_hitmap(self, epoch):
+        plt, fig = plot_hitmap(values=self.winners,
+            title="Winner compositions",
+            x_label="Compositions",
+            y_label="Transformations",
+            x_ticks=self.composition_names,
+            y_ticks=self.chain_names,
+            name=None)
+        wandb.log({"hitmap": fig, "epoch": epoch})
+        plt.close(fig)
+        self.winners: np.ndarray = np.zeros((self.num_chains, self.num_compositions), dtype=int)
+
 
     def get_loss_desc(self):
         text = ""
@@ -94,5 +109,16 @@ class Metrics:
                 self.composition_loss[comp_index]
                 / self.composition_won_samples[comp_index]
             )
+
+        for comp_index in range(self.num_compositions):
+            log[f"{self.composition_names[comp_index]}_score"] = (
+                self.composition_scores_D[comp_index]
+                / self.composition_won_samples[comp_index]
+            )
+        
+        for chain_name, chain_scores in zip(self.chain_names, self.scores):
+            last_score_set = chain_scores[-1]
+            for comp_name, comp_score in zip(self.composition_names, last_score_set):
+                log[f"{comp_name} score in {chain_name}"] = comp_score
 
         return log

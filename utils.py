@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import os
 
 import matplotlib.pyplot as plt
+import wandb
 
 from dataset import *
 from model import *
@@ -17,7 +18,6 @@ def init_weights(model: Expert, path: str) -> None:
 
     for param in model.parameters():
         param.requires_grad = True
-
 
 def show_img(img):
     npimg = img.numpy()
@@ -86,7 +86,9 @@ def show_compound(
         if not os.path.exists("./results"):
             os.mkdir("./results")
         plt.savefig(f"./results/compounds_{name}.pdf")
-    plt.show()
+    wandb.log({"results": f, "data_index": i})
+    # plt.show()
+    plt.close(f)
 
 
 def create_checkpoints_dir(checkpt_dir):
@@ -103,6 +105,7 @@ def create_optimizer(params: Iterator[Parameter], t: str, lr: float, wd: float) 
 
 
 def init_identity_experts(num_experts, checkpt_dir, model_name, load_initialized_experts, device, train_loader):
+    from trainer import initialize_expert
     experts = []
     loss_initial = torch.nn.MSELoss(reduction="mean")
     init_optimizer = "adam"
@@ -118,23 +121,24 @@ def init_identity_experts(num_experts, checkpt_dir, model_name, load_initialized
             init_weights(expert, path)
 
         else:
-            init_epochs = 5
-            # while last_loss > 0.002:
-            expert = initialize_expert_model(model_name).to(device)
-            expert.optimizer = create_optimizer(
-                expert.parameters(), init_optimizer, lr=init_learning_rate, wd=init_weight_decay
-            )
+            init_epochs = 3
+            last_loss = 1
+            while last_loss > 0.002:
+                expert = initialize_expert_model(model_name).to(device)
+                expert.optimizer = create_optimizer(
+                    expert.parameters(), init_optimizer, lr=init_learning_rate, wd=init_weight_decay
+                )
 
-            initialize_expert(
-                epochs=init_epochs,
-                expert=expert,
-                expert_index=expert_index,
-                loss=loss_initial,
-                train_loader=train_loader,
-                device=device,
-                model_name=model_name,
-                checkpt_dir=checkpt_dir,
-            )
+                last_loss = initialize_expert(
+                    epochs=init_epochs,
+                    expert=expert,
+                    expert_index=expert_index,
+                    loss=loss_initial,
+                    train_loader=train_loader,
+                    device=device,
+                    model_name=model_name,
+                    checkpt_dir=checkpt_dir,
+                )
         experts.append(expert)
     return experts
 
@@ -149,7 +153,10 @@ def load_datasets(seed, data_dir, chains, batch_size):
 
 
 def plot_hitmap(values, title, x_label, y_label, x_ticks, y_ticks, name):
-    fig, ax = plt.subplots()
+    # Calculate the figure size based on the dimensions of "values"
+    fig_width = len(x_ticks) / 2
+    fig_height = len(y_ticks) / 2
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     ax.imshow(values)
 
     # We want to show all ticks...
@@ -172,5 +179,6 @@ def plot_hitmap(values, title, x_label, y_label, x_ticks, y_ticks, name):
     ax.set_ylabel(y_label)
     fig.tight_layout()
     if name is not None:
-        plt.savefig("./results/hitmap_{name}.pdf")
+        plt.savefig(f"./results/hitmap_{name}.pdf")
     plt.show()
+    return plt, fig

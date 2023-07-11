@@ -161,10 +161,10 @@ guassian_blur = LambdaTransformer(
     name="guassian_blur"
     )
 
-# all_transformers = [shift_up, shift_down, shift_right, shift_left,
-#                     shift_up_left, shift_up_right, 
-#                     shift_down_left, shift_down_right]
-all_transformers = [shift_up, shift_right]
+all_transformers = [shift_up, shift_down, shift_right, shift_left,
+                    shift_up_left, shift_up_right, 
+                    shift_down_left, shift_down_right]
+# all_transformers = [shift_up, shift_right]
 
 
 class Chain(Transformer):
@@ -255,14 +255,14 @@ def make_chains_of_size(candidates: List[Transformer], size: int, avoid_repetiti
         return [Chain([transformer]) for transformer in candidates]
 
     chains: List[Chain] = []
-    for _ in range(size):
-        for candidate_idx, selected_candidate in enumerate(candidates):
-            other_candidates = (
-                candidates[:candidate_idx] + candidates[candidate_idx + 1 :] if avoid_repetition else candidates
-            )
-            further_sub_chains = make_chains_of_size(other_candidates, size - 1, avoid_repetition)
-            for sub_chain in further_sub_chains:
-                chains.append(Chain([selected_candidate] + sub_chain.transformers))
+    # for _ in range(size):
+    for candidate_idx, selected_candidate in enumerate(candidates):
+        other_candidates = (
+            candidates[:candidate_idx] + candidates[candidate_idx + 1 :] if avoid_repetition else candidates
+        )
+        further_sub_chains = make_chains_of_size(other_candidates, size - 1, avoid_repetition)
+        for sub_chain in further_sub_chains:
+            chains.append(Chain([selected_candidate] + sub_chain.transformers))
 
     return chains
 

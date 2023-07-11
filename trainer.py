@@ -10,7 +10,6 @@ from metrics import Metrics
 from model import Expert, Composition, Discriminator
 from selector import Selector
 
-
 def initialize_expert(
     epochs: int,
     expert: Expert,
@@ -149,6 +148,7 @@ def train_compositions_without_selector(
             mask_winners = comp_scores.argmax(dim=1)
             winner_indices = mask_winners.tolist()
             metrics.log_chain_win(chosen_chain_index, winner_indices)
+            metrics.append_scores(comp_scores, chosen_chain_index)
 
             # zero grad experts
             for expert in experts:
@@ -177,3 +177,4 @@ def train_compositions_without_selector(
                 pbar.refresh()
 
             metrics.flush(iteration=iteration, epoch=epoch)
+        metrics.log_hitmap(epoch=epoch)
